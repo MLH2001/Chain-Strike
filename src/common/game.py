@@ -1,7 +1,7 @@
 import pygame
 from common.managers import EventManager
 
-FRAMERATE = 75 # 1000 // FRAMERATE = FPS
+FRAMERATE = 50 # 1000 // FRAMERATE = FPS
 
 class ChainStrike:
   @staticmethod
@@ -12,6 +12,8 @@ class ChainStrike:
     resetCounter = 0
     resetTimer = 20
   
+    i = 0
+
     # set frame rate
     REFRESH = pygame.USEREVENT + 1
     pygame.time.set_timer(REFRESH, FRAMERATE)
@@ -31,8 +33,14 @@ class ChainStrike:
           eventManager.click(pygame.mouse.get_pos())
         elif event.type == pygame.KEYDOWN:
           eventManager.key_press(event.key)
+          if event.key == pygame.K_0:
+            pygame.image.save(eventManager._environmentManager._window.window, "image" + str(i) + ".png")
+            i += 1
+        elif event.type == pygame.KEYUP:
+          eventManager.key_release(event.key)
         elif event.type == pygame.VIDEORESIZE:
           eventManager.resize()
         elif event.type == pygame.QUIT:
+          eventManager.quit()
           running = False
     pygame.quit()

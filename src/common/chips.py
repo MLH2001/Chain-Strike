@@ -1,11 +1,34 @@
 from random import randint
-from common.graphics import Asset
+from common.graphics import Asset, Colors
+from common.containers import Matrix
 
 class Chip:
+  # Number of frames panels are highlighted
+  FASTHIGHLIGHT = 5
+  STANDARDHIGHLIGHT = 10
+  SLOWHIGHLIGHT = 30
+
   def __init__(self, asset : Asset, areaMatrix : list):
     self._asset = asset
-    self._areaMatrix = areaMatrix
-    self._invertedMatrix = self._invert_matrix()
+    self._areaMatrix = Matrix(areaMatrix)
+    self._invertedMatrix = Matrix(self._invert_matrix())
+    self.highlightFrames = Chip.STANDARDHIGHLIGHT
+    self.highlightColor = Colors.ORANGE
+
+  def fast(self) -> None:
+   """Set highlightFrames to fast"""
+   self.highlightFrames = Chip.FASTHIGHLIGHT
+   self.highlightColor = Colors.RED
+  
+  def standard(self) -> None:
+   """Set highlightFrames to standard"""
+   self.highlightFrames = Chip.STANDARDHIGHLIGHT
+   self.highlightColor = Colors.ORANGE
+
+  def slow(self) -> None:
+   """Set highlightFrames to slow"""
+   self.highlightFrames = Chip.SLOWHIGHLIGHT
+   self.highlightColor = Colors.YELLOW
 
   def get_asset(self):
     """Return chip asset"""

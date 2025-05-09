@@ -60,7 +60,7 @@ class Window:
     if isinstance(asset, Text):
       self.window.blit(asset.text, asset.text_box)
     elif isinstance(asset, Shape):
-      pygame.draw.polygon(self.window, asset.color, asset.vertices, asset.width)
+      pygame.draw.polygon(self.window, *asset.to_tuple())
     elif isinstance(asset, Collage):
       self.draw_collage(asset)
     elif isinstance(asset, Animation):

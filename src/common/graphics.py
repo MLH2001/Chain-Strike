@@ -5,20 +5,36 @@ class Colors:
   GREEN = (0, 255, 0)
   BLUE = (0, 0, 255)
   YELLOW = (255, 255, 0)
+  ORANGE = (255, 128, 0)
   PURPLE = (255, 0, 255)
+  BROWN = (88, 57, 39)
+  PERSIANGREEN = (0, 143, 122)
+  KOBE = (136, 45, 23)
+  PINK = (255, 192, 203)
   WHITE = (255, 255, 255)
   BLACK = (0, 0, 0)
   GREY = (125, 125, 125)
   PANELGREY = (150, 150, 150)
   LIGHTGREY = (200, 200, 200)
+  DARKPURPLE = (15, 10, 15)
+  DARKRED = (80, 25, 25)
+  DARKBLUE = (25, 25, 80)
+  MDPURPLE = (60, 40, 60)
 
 
 class Asset:
-  None
+  def __init__(self, id):
+    self.id = id
+
+  def __str__(self):
+    if not id:
+      return "None"
+    return str(self.id)
 
 
 class Text(Asset):
   def __init__(self, x : int, y : int, text : str = "", size : int = 12, color : tuple = Colors.BLACK, antialias : bool = True, font=None):
+    super().__init__(text)
     pyFont = pygame.font.Font(font, size)
     self.text = pyFont.render(text, antialias, color)
     self.text_box = self.text.get_rect(center=(x, y))
@@ -26,15 +42,18 @@ class Text(Asset):
 
 class Shape(Asset):
   def __init__(self, vertices : tuple = ((0,0), (0,0)), color : tuple = (0,0,0), width : int = 0, id=None):
-    self.id = id
+    super().__init__(id)
     self.vertices = vertices
     self.color = color
     self.width = width
+  
+  def to_tuple(self) -> tuple:
+    return self.color, self.vertices, self.width
 
 
 class Collage(Asset):
   def __init__(self,shapes : list = [], id=None):
-    self.id = id
+    super().__init__(id)
     self.shapes = shapes
   
   def get_component(self, component_id) -> list:
@@ -52,7 +71,7 @@ class Collage(Asset):
 
 class Animation(Asset):
   def __init__(self, frames : list = [Shape()], id=None):
-    self.id = id
+    super().__init__(id)
     self.frames = frames
     self.activeFrame = 0
 

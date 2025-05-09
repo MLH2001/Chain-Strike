@@ -47,6 +47,19 @@ class JsonHandler:
     return objs
 
   @staticmethod
+  def load_save(fileName : str) -> dict:
+    filePath = FileHandler.get_packaged_files_path(fileName)
+    with open(filePath, "r") as file:
+      data = json.load(file)
+    return data
+  
+  @staticmethod
+  def store_save(fileName : str, save : dict) -> None:
+    filePath = FileHandler.get_packaged_files_path(fileName)
+    with open(filePath, "w") as file:
+      json.dump(save, file, indent=2)
+
+  @staticmethod
   def json_to_shape(dict : dict) -> Shape:
     """Convert dictionary to Shape object"""
     id = dict["id"]

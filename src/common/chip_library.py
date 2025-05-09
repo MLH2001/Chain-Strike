@@ -1,5 +1,6 @@
 from common.json_handler import JsonHandler
 from common.chips import Chip
+from copy import deepcopy as deep_copy
 
 def load_all_chips() -> dict:
   """Load chips from json file"""
@@ -18,4 +19,4 @@ class ChipLibrary:
   @staticmethod
   def get_chip(id : int) -> Chip:
     """Return chip at a given id"""
-    return ChipLibrary.allChips[id]
+    return deep_copy(ChipLibrary.allChips[id])

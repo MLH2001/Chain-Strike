@@ -6,8 +6,11 @@ from common.graphics import *
 ###################################################################
 
 class MainMenu(Menu):
-  def __init__(self, windowSize : tuple):
+  def __init__(self, windowSize : tuple, start_function, folder_function, quit_function):
     super().__init__()
+    self._start = start_function
+    self._folder = folder_function
+    self._quit = quit_function
     self._build_assets(windowSize)
     self._build_buttons(windowSize)
 
@@ -27,12 +30,13 @@ class MainMenu(Menu):
   def _build_buttons(self, windowSize : tuple) -> None:
     """Build all buttons and their assets"""
     self._build_start_button(windowSize)
+    self._build_folder_button(windowSize)
     self._build_quit_button(windowSize)
   
   def _build_start_button(self, windowSize : tuple) -> None:
     """Build start button and its asset"""
     # Desired size
-    assetWidth, assetHeight = self._relative_size(7, 28, windowSize)
+    assetWidth, assetHeight = self._relative_size(6, 28, windowSize)
     # Load asset
     startAsset = AssetHandler.get_asset("trapezoid")
     # Scale asset
@@ -40,7 +44,7 @@ class MainMenu(Menu):
     startAsset = AssetHandler.scale(startAsset, xScale, yScale)
     # Position asset
     x = windowSize[0] // 2 - assetWidth // 2
-    y = assetHeight * 22
+    y = assetHeight * 20
     startAsset = AssetHandler.position(startAsset, x, y)
     # Color asset
     startAsset = AssetHandler.color(startAsset, Colors.RED, "trapezoid")
@@ -51,19 +55,43 @@ class MainMenu(Menu):
     self._assets.append(quitText)
     # Create button
     startButton = Button((x, x+assetWidth), (y, y+assetHeight))
-    self._buttons[startButton] = self.__start
+    self._buttons[startButton] = self._start
+
+  def _build_folder_button(self, windowSize : tuple) -> None:
+    """Build folder menu button and its asset"""
+    # Desired size
+    assetWidth, assetHeight = self._relative_size(6, 28, windowSize)
+    # Load asset
+    folderAsset = AssetHandler.get_asset("trapezoid")
+    # Scale asset
+    xScale, yScale = self._scale(folderAsset, assetWidth, assetHeight)
+    folderAsset = AssetHandler.scale(folderAsset, xScale*.64, yScale)
+    # Position asset
+    x = windowSize[0] // 2 - (assetWidth*.64) // 2
+    y = assetHeight * 22
+    folderAsset = AssetHandler.position(folderAsset, x, y)
+    # Color asset
+    folderAsset = AssetHandler.color(folderAsset, Colors.RED, "trapezoid")
+    self._assets.append(folderAsset)
+    # Create text
+    xCenter, yCenter = AssetHandler.shape_center(folderAsset)
+    folderText = Text(xCenter, yCenter, "Folder", assetHeight, Colors.WHITE)
+    self._assets.append(folderText)
+    # Create button
+    folderButton = Button((x, x+assetWidth*.64), (y, y+assetHeight))
+    self._buttons[folderButton] = self._folder
 
   def _build_quit_button(self, windowSize : tuple) -> None:
     """Build quit button and its asset"""
     # Desired size
-    assetWidth, assetHeight = self._relative_size(7, 28, windowSize)
+    assetWidth, assetHeight = self._relative_size(6, 28, windowSize)
     # Load asset
     quitAsset = AssetHandler.get_asset("trapezoid")
     # Scale asset
     xScale, yScale = self._scale(quitAsset, assetWidth, assetHeight)
-    quitAsset = AssetHandler.scale(quitAsset, xScale*.64, yScale)
+    quitAsset = AssetHandler.scale(quitAsset, xScale*.64*.64, yScale)
     # Position asset
-    x = windowSize[0] // 2 - (assetWidth*.64) // 2
+    x = windowSize[0] // 2 - (assetWidth*.64*.64) // 2
     y = assetHeight * 24
     quitAsset = AssetHandler.position(quitAsset, x, y)
     # Color asset
@@ -71,24 +99,11 @@ class MainMenu(Menu):
     self._assets.append(quitAsset)
     # Create text
     xCenter, yCenter = AssetHandler.shape_center(quitAsset)
-    quitText = Text(xCenter-3, yCenter+1, "Quit", assetHeight, Colors.WHITE)
+    quitText = Text(xCenter, yCenter, "Quit", assetHeight, Colors.WHITE)
     self._assets.append(quitText)
     # Create button
-    quitButton = Button((x, x+assetWidth*.64), (y, y+assetHeight))
-    self._buttons[quitButton] = self.__quit
-
-  def __start(self, environmentManager) -> None:
-    """Start button event"""
-    CAM = environmentManager.get_environment("CAM")
-    CAM.activate(environmentManager)
-    SE = environmentManager.get_environment("SE")
-    SE.deactivate()
-    self.deactivate()
-    environmentManager.resize()
-
-  def __quit(self, environmentManager) -> None:
-    """Quit button event"""
-    pygame.event.post(pygame.event.Event(pygame.QUIT))
+    quitButton = Button((x, x+assetWidth*.64*.64), (y, y+assetHeight))
+    self._buttons[quitButton] = self._quit
 
 
 ###################################################################

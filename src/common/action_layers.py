@@ -2,6 +2,7 @@ from common.user_interface import ActionLayer
 from common.asset_handler import AssetHandler
 from common.graphics import *
 from common.player import Player
+from common.containers import Matrix
 
 ###################################################################################
 #                                PlayerLayer                                      #
@@ -134,11 +135,8 @@ class PlayerLayer(ActionLayer):
 class StageLayer(ActionLayer):
   def __init__(self, windowSize : tuple):
     super().__init__()
-    self._highlights = [[False]*6]*3
-    self._hits = [[False]*6]*3
-    self._p1ChipOrder = []
-    self._p2ChipOrder = []
-    self._hitOrder = []
+    self._highlights = Matrix([[False]*6]*3)
+    self._hits = Matrix([[False]*6]*3)
     self._build_assets(windowSize)
     self._build_events()
 
@@ -161,87 +159,18 @@ class StageLayer(ActionLayer):
     self._assets.clear()
     self._build_assets(windowSize)
 
-  def highlight(self, matrix : list) -> None:
+  def highlight(self, matrix : Matrix) -> None:
     """Highlight panels in matrix"""
     self._highlights = matrix
   
-  def hit(self, matrix : list) -> None:
+  def hit(self, matrix : Matrix) -> None:
     """Hit panels in matrix"""
     self._hits = matrix
   
-  def highlight_chip(self) -> bool:
-    """Highlight next chip in p1 and p2 chipOrder"""
-    clearMatrix =[[False]*6]*3
-    self.hit(clearMatrix)
-    
-    if len(self._p1ChipOrder) == 0 and len(self._p2ChipOrder) == 0:
-      return False
-    
-    if len(self._p1ChipOrder) > 0:
-      chip = self._p1ChipOrder.pop(0)
-      p1AreaMatix = chip.get_area_matrix()
-    else:
-      p1AreaMatix = [[False]*3]*3
-    if len(self._p2ChipOrder) > 0:
-      chip = self._p2ChipOrder.pop(0)
-      p2AreaMatix = chip.get_inverted_matrix()
-    else:
-      p2AreaMatix = [[False]*3]*3
-    areaMatrix = self._combine_matrices(p1AreaMatix, p2AreaMatix)
-    self._hitOrder.append(areaMatrix)
-    self.highlight(areaMatrix)
-    return True
-  
-  def hit_chip(self) -> None:
-    """Hit next chip in hit order"""
-    if len(self._hitOrder) == 0:
-      self._end_combat()
-      return [[False]*6]*3
-    self.hit(self._hitOrder.pop(0))
-    clearMatrix = [[False]*6]*3
-    self.highlight(clearMatrix)
-    return self._hits
-  
   def clear_highlight(self) -> None:
     """Clear all active highlights"""
-    self._highlights = [[False]*6]*3
-    self._hits = [[False]*6]*3
-  
-  def _end_combat(self):
-    """Clear hits and mark players as not ready"""
-    self._events["P1READY"] = False
-    self._events["P2READY"] = False
-    clearMatrix =[[False]*6]*3
-    self.hit(clearMatrix)
-
-  def _combine_matrices(self, matrix1 : list, matrix2 : list) -> list:
-    """Combine 2 matrices into a 3x6 matrix"""
-    combinedMatrix = [
-      [False, False, False, False, False, False],
-      [False, False, False, False, False, False],
-      [False, False, False, False, False, False]
-    ]
-    for row in range(len(matrix1)):
-      for col in range(len(matrix1[row])):
-        combinedMatrix[row][col+3] = matrix1[row][col]
-    for row in range(len(matrix2)):
-      for col in range(len(matrix2[row])):  
-        combinedMatrix[row][col] = matrix2[row][col]
-    return combinedMatrix
-
-  def load_p1_chip_order(self, chipOrder : list) -> None:
-    """Update p1ChipOrder and signal P1READY"""
-    self._p1ChipOrder = chipOrder
-    self._events["P1READY"] = True
-  
-  def load_p2_chip_order(self, chipOrder : list) -> None:
-    """Update p2ChipOrder and signal P2READY"""
-    self._p2ChipOrder = chipOrder
-    self._events["P2READY"] = True
-  
-  def get_hit_order(self) -> list:
-    """Return hit order"""
-    return self._hitOrder
+    self._highlights.clear()
+    self._hits.clear()
 
   ###################################################################
   #                        Stage Builders                           #

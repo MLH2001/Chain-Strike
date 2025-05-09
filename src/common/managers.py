@@ -7,7 +7,10 @@ from common.action_menus import *
 from common.player import *
 from common.chips import *
 from common.chip_library import ChipLibrary
+from common.containers import *
+from common.save import Save
 from random import randint
+from copy import deepcopy as deep_copy
 
 ###################################################################################
 #                              Evironment Manager                                 #
@@ -131,14 +134,20 @@ class PlayerManager:
 #                                Combat Manager                                   #
 ###################################################################################
 
+HITCOOLDOWN = 20
+SWITCH = 10
+EMPTYMATRIX = Matrix([[False]*3]*3)
+
 class CombatManager:
   def __init__(self):
-    self._frameCounter = -1
-    self._highlightFrames = 10
-    self._hitFrames = 1
-    self._p1Vulnerable = True
-    self._p2Vulnerable = True
+    self._switchCounter = 0
+    self._combinedChain = ParallelChains()
+    self._p1HitCounter = HITCOOLDOWN
+    self._p2HitCounter = HITCOOLDOWN
     self.events = {
+      "ACTIVE" : False,
+      "P1READY" : False,
+      "P2READY" : False,
       "HIGHLIGHT" : True,
       "HIT" : False,
       "P1HIT" : False,
@@ -147,48 +156,113 @@ class CombatManager:
       "P2VULNERABLE" : True
     }
   
-  def combat(self, SAL : StageLayer, p1Manager : PlayerManager, p2Manager : PlayerManager) -> None:
-    """Update the combat state"""
-    self._frameCounter += 1
-    if self._frameCounter == 0:
-      if self.events["HIGHLIGHT"]:
-        self._highlight(SAL)
-        self._hitMatrix = [[False]*6]*3
-        if not self.events["HIGHLIGHT"]:
-          p2Manager.player.hitOrder = SAL.get_hit_order()
-          p2Manager.player.analyze()
-          self.events["HIT"] = True
-        return
-      if self.events["HIT"]:
-        self._hit(SAL)
-        p2Manager.player.analyze()
-        if self._hitMatrix == [[False]*6]*3:
-          self.events["HIT"] = False
-          self.events["HIGHLIGHT"] = True
-    if self._frameCounter == self._highlightFrames:
+  def load_p1_chip_order(self, chipOrder : list) -> None:
+    """Set p1 chip order for next round"""
+    self._p1Chain = self._order_to_chain(chipOrder)
+    self.events["P1READY"] = True
+  
+  def load_p2_chip_order(self, chipOrder : list) -> None:
+    """Set p2 chip order for next round"""
+    self._p2Chain = self._order_to_chain(chipOrder)
+    self.events["P2READY"] = True
+
+  def _order_to_chain(self, chipOrder : list) -> list:
+    """Convert a list of chips to a list of panel matrices"""
+    chain = Chain()
+    for chip in chipOrder:
+      for i in range(chip.highlightFrames):
+        chain.append(chip.get_area_matrix())
+    return chain
+
+  def _combine_chains(self) -> None:
+    """Combine p1Chain and p2Chain"""
+    self._combinedChain.clear()
+    self._combinedChain["P1"] = Chain()
+    self._combinedChain["P2"] = Chain()
+    while len(self._p1Chain) > 0 or len(self._p2Chain) > 0:
+      if len(self._p1Chain) == 0:
+        rightChain = EMPTYMATRIX
+      else:
+        rightChain = self._p1Chain.pop(0)
+      if len(self._p2Chain) == 0:
+        leftChain = EMPTYMATRIX
+      else:
+        leftChain = self._p2Chain.pop(0)
+      self._combinedChain["P1"].append(leftChain)
+      self._combinedChain["P2"].append(rightChain)
+
+  def initialize_combat(self) -> None:
+    """Set state for new round of combat"""
+    if not self.events["ACTIVE"]:
+      self._combine_chains()
+      self._chainIndex = 0
+      self.events["HIGHLIGHT"] = True
+      self.events["HIT"] = False
+      self.events["P1HIT"] = False
+      self.events["P2HIT"] = False
       self.events["P1VULNERABLE"] = True
       self.events["P2VULNERABLE"] = True
-      self._frameCounter = -1
-      return
-    if self.events["HIT"] and self._frameCounter == self._hitFrames:
-      SAL.clear_highlight()
-      self._hitMatrix = [[False]*6]*3
-    
-    if self.events["HIT"]:
-      row, col = p1Manager.player.get_stage_position()
-      if self._hitMatrix[row][col] and self.events["P1VULNERABLE"]:
-        self.events["P1HIT"] = True
-      row, col = p2Manager.player.get_stage_position()
-      if self._hitMatrix[row][col] and self.events["P2VULNERABLE"]:
-        self.events["P2HIT"] = True
+      self.events["ACTIVE"] = True
+
+  def combat(self, SAL : StageLayer, p1Manager : PlayerManager, p2Manager : PlayerManager) -> None:
+    """Update the combat state"""
+    if self.events["HIGHLIGHT"]:
+      self._highlight(SAL, p2Manager)
+      self._chainIndex += 1
+    if self.events["HIT"] and self._switchCounter >= SWITCH:
+      self._hit(SAL, p1Manager, p2Manager)
+      self._chainIndex += 1
+    self._switchCounter += 1
   
-  def _highlight(self, SAL : StageLayer) -> None:
+  def _highlight(self, SAL : StageLayer, p2Manager : PlayerManager) -> None:
     """Highlight next chips in chip order"""
-    self.events["HIGHLIGHT"] = SAL.highlight_chip()
+    if self._chainIndex < len(self._combinedChain):
+      SAL.highlight(self._combinedChain.merge(self._chainIndex))
+    else:
+      self._chainIndex = 0
+      self._switchCounter = 0
+      self.events["HIGHLIGHT"] = False
+      self.events["HIT"] = True
+      SAL.clear_highlight()
+      p2Manager.player.hitOrder = self._combinedChain["P2"]
+      p2Manager.player.analyze()
   
-  def _hit(self, SAL : StageLayer) -> None:
+  def _hit(self, SAL : StageLayer, p1Manager : PlayerManager, p2Manager : PlayerManager) -> None:
     """Hit next chip in chip order"""
-    self._hitMatrix = SAL.hit_chip()
+    if self._chainIndex < len(self._combinedChain):
+      SAL.hit(self._combinedChain.merge(self._chainIndex))
+      self._update_vulnerability()
+      self._check_for_hit(p1Manager, p2Manager)
+    else:
+      self._chainIndex = 0
+      self.events["HIGHLIGHT"] = True
+      self.events["HIT"] = False
+      self.events["P1READY"] = False
+      self.events["P2READY"] = False
+      self.events["ACTIVE"] = False
+      SAL.clear_highlight()
+  
+  def _update_vulnerability(self) -> None:
+    """Mark players as vulnerable of hit cooldown"""
+    if self._p1HitCounter >= HITCOOLDOWN:
+      self.events["P1VULNERABLE"] = True
+    if self._p2HitCounter >= HITCOOLDOWN:
+      self.events["P2VULNERABLE"] = True
+  
+  def _check_for_hit(self, p1Manager : PlayerManager, p2Manager : PlayerManager) -> None:
+    """Detrmine if a playeer ahs been hit"""
+    row, col = p1Manager.player.get_stage_position()
+    if self._combinedChain["P1"][self._chainIndex][row][col] and self.events["P1VULNERABLE"]:
+      self.events["P1HIT"] = True
+      self.events["P1VULNERABLE"] = False
+      self._p1HitCounter = -1
+    row, col = p2Manager.player.get_stage_position()
+    if self._combinedChain["P2"][self._chainIndex][row][col-3] and self.events["P2VULNERABLE"]:
+      self.events["P2HIT"] = True
+      self.events["P2VULNERABLE"] = False
+      self._p2HitCounter = -1
+    self._p1HitCounter += 1
+    self._p2HitCounter += 1
 
 
 ###################################################################################
@@ -201,9 +275,8 @@ class EventManager:
     self._initialize_players()
     self._initialize_environments()
     self._position_players()
+    self._initialize_state_variables()
     self._combatManager = CombatManager()
-    self.RESET = False
-    self._pause = False
   
   def reset(self):
     self._initialize_players()
@@ -215,18 +288,19 @@ class EventManager:
 
   def _initialize_players(self) -> None:
     """Create a folder and assign it to two new player objects"""
-    chips = []
+    p2Chips = []
     used = []
-    while len(chips) < 15:
-      id = randint(210, 419)
+    while len(p2Chips) < 15:
+      id = randint(0, 119)
       if id not in used:
         chip = ChipLibrary.get_chip(id)
-        chips.append(chip)
+        p2Chips.append(chip)
         used.append(id)
-    folder = Folder(chips)
+    p2Folder = Folder(p2Chips)
+    self._playerFolder = self._to_folder(Save.attribute("playerFolder"))
 
-    player1 = Player(folder)
-    player2 = Bot(folder)
+    player1 = Player(self._playerFolder)
+    player2 = Bot(p2Folder)
     player2.move((1, 4))
 
     self._p1Manager = PlayerManager(player1, (0, 2))
@@ -248,12 +322,21 @@ class EventManager:
     self._environmentManager.add_environment("PAL", PlayerLayer, self._p1Manager.player, self._p2Manager.player)
     self._environmentManager.add_environment("GOE", GameOverEnvironment)
     self._environmentManager.add_environment("VE", VictoryEnvironment)
-    self._environmentManager.add_environment("CAM", ChipMenu, self._p1Manager.player.get_folder())
-    self._environmentManager.add_environment("PM", PauseMenu, self._resume, self._main_menu, self._quit)
-    self._environmentManager.add_environment("MM", MainMenu)
+    self._environmentManager.add_environment("CAM", ChipMenu, self._p1Manager.player.get_folder(), self._confirm)
+    self._environmentManager.add_environment("PM", PauseMenu, self._resume, self._main_menu, self.quit)
+    self._environmentManager.add_environment("FAM", FolderSelectMenu, Save.attribute("playerFolder"), self._save_folder, self._close_folder_menu)
+    self._environmentManager.add_environment("MM", MainMenu, self._start, self._activate_FAM, self.quit)
     self._environmentManager.get_environment("MM").activate()
     self._environmentManager.get_environment("BE").activate()
     self._environmentManager.get_environment("SE").activate()
+
+  def _initialize_state_variables(self) -> None:
+    """Initialize class state variables"""
+    self.RESET = False
+    self._pause = False
+    self._shiftActive = False
+    self._ctrlActive = False
+    self._dodgeCounter = 0
 
   ###################################################################
   #                           Events                                #
@@ -264,37 +347,52 @@ class EventManager:
     if self._pause:
       return
     
-    SAL = self._environmentManager.get_environment("SAL")
-    stageEvents = SAL.get_events()
-    if stageEvents["P1READY"] and not stageEvents["P2READY"]:
+    if self._combatManager.events["P1READY"] and not self._combatManager.events["P2READY"]:
       p2ChipOrder = self._p2Manager.player.select_chips()
-      SAL.load_p2_chip_order(p2ChipOrder)
+      self._combatManager.load_p2_chip_order(p2ChipOrder)
 
-    inCombat = False
-    if stageEvents["P1READY"] and stageEvents["P2READY"]:
-      inCombat = True
+    if self._combatManager.events["P1READY"] and self._combatManager.events["P2READY"]:
+      if self._combatManager.events["HIGHLIGHT"]:
+        vector = self._p2Manager.player.idle()
+        self._dodgeCounter = 0
+      elif self._dodgeCounter > SWITCH-3:
+        vector = self._p2Manager.player.dodge()
+      else:
+        vector = (0, 0)
+        self._dodgeCounter += 1
+      self._move_p2(vector)
+
+      self._combatManager.initialize_combat()
       SAL = self._environmentManager.get_environment("SAL")
       self._combatManager.combat(SAL, self._p1Manager, self._p2Manager)
       if self._combatManager.events["P1HIT"]:
         self._p1Manager.damage_player()
         self._damage_event()
         self._combatManager.events["P1HIT"] = False
-        self._combatManager.events["P1VULNERABLE"] = False
       if self._combatManager.events["P2HIT"]:
         self._p2Manager.damage_player()
         self._damage_event()
         self._combatManager.events["P2HIT"] = False
-        self._combatManager.events["P2VULNERABLE"] = False
     elif self._environmentManager.get_environment("SAL").status == Environment.ACTIVE:
-      self._environmentManager.get_environment("CAM").activate(self._environmentManager)
-    
-    if inCombat:
-      if self._combatManager.events["HIGHLIGHT"]:
-        vector = self._p2Manager.player.idle()
-      else:
-        vector = self._p2Manager.player.dodge() 
-      self._move_p2(vector)
+      self._activate_CAM()
   
+  def _activate_CAM(self) -> None:
+    PAL = self._environmentManager.get_environment("PAL")
+    PAL.pause()
+    SAL = self._environmentManager.get_environment("SAL")
+    SAL.pause()
+    BE = self._environmentManager.get_environment("BE")
+    BE.pause()
+    CAM = self._environmentManager.get_environment("CAM")
+    CAM.resize(self._environmentManager.get_window_size())
+    CAM.activate()
+
+  def _activate_FAM(self) -> None:
+    FAM = self._environmentManager.get_environment("FAM")
+    MM = self._environmentManager.get_environment("MM")
+    FAM.activate()
+    MM.deactivate()
+
   def refresh(self) -> None:
     """Draw the next frame"""
     self._environmentManager.update()
@@ -321,7 +419,50 @@ class EventManager:
       self._move_p1((0, 1))
     elif key == pygame.K_ESCAPE:
       self._pause_game()
+    elif key == pygame.K_LSHIFT or key == pygame.K_RSHIFT:
+      self._shiftActive = True
+      CAM = self._environmentManager.get_environment("CAM")
+      CAM.get_events()["FAST"]()
+    elif key == pygame.K_LCTRL or key == pygame.K_RCTRL:
+      self._ctrlActive = True
+      CAM = self._environmentManager.get_environment("CAM")
+      CAM.get_events()["SLOW"]()
   
+  def key_release(self, key) -> None:
+    if key == pygame.K_LSHIFT or key == pygame.K_RSHIFT:
+      self._shiftActive = False
+      CAM = self._environmentManager.get_environment("CAM")
+      CAM.get_events()["STANDARD"]()
+    elif key == pygame.K_LCTRL or key == pygame.K_RCTRL:
+      self._ctrlActive = False
+      CAM = self._environmentManager.get_environment("CAM")
+      CAM.get_events()["STANDARD"]()
+
+  ###################################################################
+  #                      Menu Button Events                         #
+  ###################################################################
+
+  def _start(self) -> None:
+    """Start button event"""
+    self._activate_CAM()
+    SE = self._environmentManager.get_environment("SE")
+    SE.deactivate()
+    MM = self._environmentManager.get_environment("MM")
+    MM.deactivate()
+    self._environmentManager.resize()
+
+  def _confirm(self) -> None:
+    """Button event for confirming current chip order in CAM"""
+    BE = self._environmentManager.get_environment("BE")
+    BE.activate()
+    PAL = self._environmentManager.get_environment("PAL")
+    PAL.activate()
+    SAL = self._environmentManager.get_environment("SAL")
+    SAL.activate()
+    CAM = self._environmentManager.get_environment("CAM")
+    self._combatManager.load_p1_chip_order(CAM.export_chip_order())
+    CAM.get_events()["CONFIRM"]()
+
   def _pause_game(self) -> None:
     """Pause all active environmeents and  activate pause menu"""
     if self._environmentManager.get_environment("MM").status == Environment.ACTIVE:
@@ -344,19 +485,47 @@ class EventManager:
     for key, status in self._state:
       self._environmentManager.get_environment(key).status = status
   
-  def _resume(self, *args) -> None:
+  def _resume(self) -> None:
     """Resume game from pause menu"""
     self._environmentManager.get_environment("PM").deactivate()
     self._load_state()
     self._pause = False
   
-  def _main_menu(self, *args) -> None:
+  def _main_menu(self) -> None:
     """Reset game"""
     self.reset()
   
-  def _quit(self, *args) -> None:
+  def quit(self) -> None:
     """Quit game"""
+    Save.write()
     pygame.event.post(pygame.event.Event(pygame.QUIT))
+
+  def _save_folder(self) -> None:
+    """Save folder created in folder menu"""
+    FAM = self._environmentManager.get_environment("FAM")
+    if FAM.get_events()["SAVE"]():
+      newFolder = FAM.get_folder()
+      self._playerFolder = self._to_folder(newFolder)
+      CAM = self._environmentManager.get_environment("CAM")
+      CAM.set_folder(self._playerFolder)
+      Save.attributes["playerFolder"] = deep_copy(FAM.get_folder())
+  
+  def _to_folder(self, indexList : list) -> Folder:
+    """Convert list of chip ids to folder object"""
+    chips = []
+    for index in indexList:
+      chip = ChipLibrary.get_chip(index)
+      chips.append(chip)
+    folder = Folder(chips)
+    return folder
+  
+  def _close_folder_menu(self) -> None:
+    """Close folder menu and open main menu"""
+    FAM = self._environmentManager.get_environment("FAM")
+    FAM.set_folder(Save.attribute("playerFolder"))
+    FAM.deactivate()
+    MM = self._environmentManager.get_environment("MM")
+    MM.activate()
 
   ###################################################################
   #                           Buttons                               #
@@ -373,7 +542,7 @@ class EventManager:
     """Determine if a button has been clicked and call its event if so"""
     for button in buttons.keys():
       if self._in_range(x, y, button.xRange, button.yRange):
-        buttons[button](self._environmentManager)
+        buttons[button]()
         break
 
   def _in_range(self, x : int, y : int, xRange : tuple, yRange : tuple) -> bool:

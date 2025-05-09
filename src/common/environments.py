@@ -18,26 +18,21 @@ class BackgroundEnvironment(Environment):
   def _build_background(self, windowSize : tuple) -> None:
     """Build background assets"""
     # Desired size
-    snakeWidth, snakeHeight = self._relative_size(12, 16, windowSize)
-
-    for col in range(14):
-      for row in range(18):
-        # Load asset
-        snake = AssetHandler.get_asset("snake")
-
-        # Scale asset
-        xScale, yScale = self._scale(snake, snakeWidth, snakeHeight)
-        AssetHandler.scale(snake, xScale, yScale)
-
-        # Position asset
-        x = snakeWidth * (col-1)
-        y = snakeHeight * (row-1)
-        AssetHandler.position(snake, x, y)
-        
-        # Stagger animations
-        if col % 2 == 1 or row % 2 == 1:
-          snake.activeFrame = len(snake.frames) // 4
-        self._assets.append(snake)
+    width, height = windowSize
+    # Load Asset
+    background = AssetHandler.get_asset("background")
+    # Position Asset
+    AssetHandler.position(background, 0, 0)
+    # Scale Asset
+    xScale, yScale = self._scale(background, width, height)
+    AssetHandler.scale(background, xScale, yScale)
+    # Color Asset
+    for frame in background.frames:
+      AssetHandler.color(frame, Colors.DARKPURPLE, "base")
+      AssetHandler.color(frame, Colors.DARKRED, "1")
+      AssetHandler.color(frame, Colors.DARKBLUE, "2")
+      AssetHandler.color(frame, Colors.MDPURPLE, "3")
+    self._assets.append(background)
 
 
 class GameOverEnvironment(Environment):
